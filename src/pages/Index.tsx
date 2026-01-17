@@ -1,53 +1,120 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import ChatList, { type Chat } from '@/components/ChatList';
 import ChatWindow, { type Message } from '@/components/ChatWindow';
 import ProfileDialog from '@/components/ProfileDialog';
+import AuthDialog from '@/components/AuthDialog';
 import CallsTab from '@/components/CallsTab';
 import MusicTab from '@/components/MusicTab';
 import WalletTab from '@/components/WalletTab';
 import ShopTab from '@/components/ShopTab';
 import SettingsTab from '@/components/SettingsTab';
-
-const mockChats: Chat[] = [
-  { id: '1', name: 'Алексей Петров', username: '@alexpetr', avatar: '', lastMessage: 'Привет! Как дела?', time: '14:23', unread: 2, online: true },
-  { id: '2', name: 'Рабочая группа', username: '@workgroup', avatar: '', lastMessage: 'Встреча в 15:00', time: '13:45', unread: 5, isGroup: true },
-  { id: '3', name: 'Мария Иванова', username: '@mariaiv', avatar: '', lastMessage: 'Спасибо за помощь!', time: '12:10', unread: 0 },
-  { id: '4', name: 'Канал новостей', username: '@news_ch', avatar: '', lastMessage: 'Важные обновления', time: 'Вчера', unread: 12, isGroup: true },
-];
-
-const mockMessages: Message[] = [
-  { id: '1', text: 'Привет! Как дела?', time: '14:20', isMine: false },
-  { id: '2', text: 'Отлично! А у тебя?', time: '14:21', isMine: true },
-  { id: '3', text: 'Тоже всё хорошо, спасибо 😊', time: '14:23', isMine: false },
-];
+import { api, type User } from '@/lib/api';
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState<'chats' | 'calls' | 'music' | 'wallet' | 'shop' | 'settings'>('chats');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [messageInput, setMessageInput] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const [profile, setProfile] = useState({
-    name: 'Вы',
-    username: '@yourname',
-    avatar: '',
+  const profile = {
+    name: currentUser?.name || 'Вы',
+    username: currentUser?.username || '@yourname',
+    avatar: currentUser?.avatar || '',
     banner: '',
-    verified: true,
-  });
-
-  const sendMessage = () => {
-    if (!messageInput.trim()) return;
-    setMessages([...messages, {
-      id: Date.now().toString(),
-      text: messageInput,
-      time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-      isMine: true,
-    }]);
-    setMessageInput('');
+    verified: currentUser?.verified || false,
   };
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('speakly_user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      setCurrentUser(user);
+      loadChats(user.id);
+    }
+  }, []);
+
+  const loadChats = async (userId: number) => {
+    try {
+      const data = await api.getChats(userId);
+      setChats(data);
+    } catch (error) {
+      console.error('Load chats error:', error);
+    }
+  };
+
+  const handleAuthSuccess = (user: User) => {
+    setCurrentUser(user);
+    localStorage.setItem('speakly_user', JSON.stringify(user));
+    loadChats(user.id);
+  };
+
+  const handleChatSelect = async (chat: Chat) => {
+    setSelectedChat(chat);
+    if (currentUser) {
+      try {
+        const data = await api.getMessages(Number(chat.id), currentUser.id);
+        setMessages(data);
+      } catch (error) {
+        console.error('Load messages error:', error);
+      }
+    }
+  };
+
+  const sendMessage = async () => {
+    if (!messageInput.trim() || !selectedChat || !currentUser) return;
+    
+    try {
+      const result = await api.sendMessage(
+        Number(selectedChat.id),
+        currentUser.id,
+        messageInput
+      );
+      
+      setMessages([...messages, {
+        id: result.id.toString(),
+        text: messageInput,
+        time: result.time,
+        isMine: true,
+      }]);
+      setMessageInput('');
+    } catch (error) {
+      console.error('Send message error:', error);
+    }
+  };
+
+  const handleFileUpload = async (fileUrl: string, fileType: string) => {
+    if (!selectedChat || !currentUser) return;
+    
+    try {
+      const result = await api.sendMessage(
+        Number(selectedChat.id),
+        currentUser.id,
+        '',
+        fileUrl,
+        fileType
+      );
+      
+      setMessages([...messages, {
+        id: result.id.toString(),
+        text: '',
+        fileUrl,
+        fileType,
+        time: result.time,
+        isMine: true,
+      }]);
+    } catch (error) {
+      console.error('Send file error:', error);
+    }
+  };
+
+  if (!currentUser) {
+    return <AuthDialog open={true} onSuccess={handleAuthSuccess} />;
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -61,9 +128,9 @@ export default function Index() {
       {activeTab === 'chats' && (
         <>
           <ChatList
-            chats={mockChats}
+            chats={chats}
             selectedChat={selectedChat}
-            onChatSelect={setSelectedChat}
+            onChatSelect={handleChatSelect}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
           />
@@ -73,6 +140,7 @@ export default function Index() {
             messageInput={messageInput}
             onMessageInputChange={setMessageInput}
             onSendMessage={sendMessage}
+            onFileUpload={handleFileUpload}
           />
         </>
       )}
@@ -91,7 +159,11 @@ export default function Index() {
         open={profileOpen}
         onOpenChange={setProfileOpen}
         profile={profile}
-        onProfileChange={setProfile}
+        onProfileChange={(newProfile) => {
+          if (currentUser) {
+            setCurrentUser({ ...currentUser, ...newProfile });
+          }
+        }}
       />
     </div>
   );

@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -5,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import Icon from '@/components/ui/icon';
 import type { Chat } from './ChatList';
+import { api } from '@/lib/api';
 
 export interface Message {
   id: string;
@@ -12,6 +14,8 @@ export interface Message {
   time: string;
   isMine: boolean;
   sender?: string;
+  fileUrl?: string;
+  fileType?: string;
 }
 
 interface ChatWindowProps {
@@ -20,9 +24,71 @@ interface ChatWindowProps {
   messageInput: string;
   onMessageInputChange: (value: string) => void;
   onSendMessage: () => void;
+  onFileUpload?: (url: string, type: string) => void;
 }
 
-export default function ChatWindow({ chat, messages, messageInput, onMessageInputChange, onSendMessage }: ChatWindowProps) {
+export default function ChatWindow({ chat, messages, messageInput, onMessageInputChange, onSendMessage, onFileUpload }: ChatWindowProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+
+  const handleFileClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onFileUpload) {
+      try {
+        const result = await api.uploadFile(file);
+        const fileType = file.type.startsWith('image/') ? 'image' : 
+                        file.type.startsWith('video/') ? 'video' : 'file';
+        onFileUpload(result.url, fileType);
+      } catch (error) {
+        console.error('File upload error:', error);
+      }
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+        
+        if (onFileUpload) {
+          try {
+            const result = await api.uploadFile(file);
+            onFileUpload(result.url, 'voice');
+          } catch (error) {
+            console.error('Voice upload error:', error);
+          }
+        }
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Recording error:', error);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setMediaRecorder(null);
+    }
+  };
+
   if (!chat) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
@@ -100,7 +166,26 @@ export default function ChatWindow({ chat, messages, messageInput, onMessageInpu
                 {msg.sender && (
                   <p className="text-xs font-medium text-primary mb-1">{msg.sender}</p>
                 )}
-                <p className="break-words">{msg.text}</p>
+                
+                {msg.fileUrl && msg.fileType === 'image' && (
+                  <img src={msg.fileUrl} alt="Изображение" className="rounded-lg max-w-xs mb-2" />
+                )}
+                
+                {msg.fileUrl && msg.fileType === 'voice' && (
+                  <audio controls className="mb-2">
+                    <source src={msg.fileUrl} type="audio/webm" />
+                  </audio>
+                )}
+                
+                {msg.fileUrl && msg.fileType === 'file' && (
+                  <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mb-2 text-sm underline">
+                    <Icon name="File" size={16} />
+                    Скачать файл
+                  </a>
+                )}
+                
+                {msg.text && <p className="break-words">{msg.text}</p>}
+                
                 <p className={`text-xs mt-1 ${msg.isMine ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                   {msg.time}
                 </p>
@@ -112,7 +197,20 @@ export default function ChatWindow({ chat, messages, messageInput, onMessageInpu
 
       <div className="border-t border-border bg-card p-4">
         <div className="max-w-4xl mx-auto flex items-center gap-2">
-          <Button size="icon" variant="ghost" className="rounded-full flex-shrink-0">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            className="rounded-full flex-shrink-0"
+            onClick={handleFileClick}
+          >
             <Icon name="Paperclip" size={20} />
           </Button>
 
@@ -128,8 +226,16 @@ export default function ChatWindow({ chat, messages, messageInput, onMessageInpu
             <Icon name="Smile" size={20} />
           </Button>
 
-          <Button size="icon" variant="ghost" className="rounded-full flex-shrink-0">
-            <Icon name="Mic" size={20} />
+          <Button 
+            size="icon" 
+            variant={isRecording ? 'destructive' : 'ghost'}
+            className="rounded-full flex-shrink-0"
+            onMouseDown={startRecording}
+            onMouseUp={stopRecording}
+            onTouchStart={startRecording}
+            onTouchEnd={stopRecording}
+          >
+            <Icon name={isRecording ? 'Square' : 'Mic'} size={20} />
           </Button>
 
           <Button

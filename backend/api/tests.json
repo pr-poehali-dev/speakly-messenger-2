@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "name": "Test search users",
+      "method": "GET",
+      "path": "/?action=search_users&query=test",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "0": {
+          "id": "number",
+          "username": "string",
+          "name": "string"
+        }
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Test OPTIONS request",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    }
+  ]
+}
