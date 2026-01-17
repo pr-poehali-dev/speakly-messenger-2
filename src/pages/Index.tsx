@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import Icon from '@/components/ui/icon';
 import Sidebar from '@/components/Sidebar';
 import ChatList, { type Chat } from '@/components/ChatList';
 import ChatWindow, { type Message } from '@/components/ChatWindow';
 import ProfileDialog from '@/components/ProfileDialog';
+import CallsTab from '@/components/CallsTab';
+import MusicTab from '@/components/MusicTab';
+import WalletTab from '@/components/WalletTab';
+import ShopTab from '@/components/ShopTab';
+import SettingsTab from '@/components/SettingsTab';
 
 const mockChats: Chat[] = [
   { id: '1', name: 'Алексей Петров', username: '@alexpetr', avatar: '', lastMessage: 'Привет! Как дела?', time: '14:23', unread: 2, online: true },
@@ -73,55 +77,15 @@ export default function Index() {
         </>
       )}
 
-      {activeTab === 'calls' && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Icon name="Phone" size={64} className="mx-auto mb-4 opacity-20" />
-            <p className="text-lg">Звонки</p>
-            <p className="text-sm">Раздел в разработке</p>
-          </div>
-        </div>
-      )}
+      {activeTab === 'calls' && <CallsTab />}
 
-      {activeTab === 'music' && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Icon name="Music" size={64} className="mx-auto mb-4 opacity-20" />
-            <p className="text-lg">Музыка</p>
-            <p className="text-sm">Раздел в разработке</p>
-          </div>
-        </div>
-      )}
+      {activeTab === 'music' && <MusicTab />}
 
-      {activeTab === 'wallet' && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Icon name="Wallet" size={64} className="mx-auto mb-4 opacity-20" />
-            <p className="text-lg">Кошелёк</p>
-            <p className="text-sm">Раздел в разработке</p>
-          </div>
-        </div>
-      )}
+      {activeTab === 'wallet' && <WalletTab />}
 
-      {activeTab === 'shop' && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Icon name="ShoppingBag" size={64} className="mx-auto mb-4 opacity-20" />
-            <p className="text-lg">Магазин</p>
-            <p className="text-sm">Раздел в разработке</p>
-          </div>
-        </div>
-      )}
+      {activeTab === 'shop' && <ShopTab />}
 
-      {activeTab === 'settings' && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center text-muted-foreground">
-            <Icon name="Settings" size={64} className="mx-auto mb-4 opacity-20" />
-            <p className="text-lg">Настройки</p>
-            <p className="text-sm">Раздел в разработке</p>
-          </div>
-        </div>
-      )}
+      {activeTab === 'settings' && <SettingsTab />}
 
       <ProfileDialog
         open={profileOpen}
